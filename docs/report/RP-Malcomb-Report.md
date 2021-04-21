@@ -45,14 +45,24 @@ The replication study will use R.
 
 ## Materials and Procedure
 
-ADAPTIVE CAPACITY WORKFLOW [ASSETS & ACCESS]
+*ADAPTIVE CAPACITY WORKFLOW [ASSETS & ACCESS]*
 
-Bring in DHS Data [Households Level] (vector)
-FIELD CALCULATOR: Normalize each indicator variable into quintiles (0 is lowest, 5 is highest--we understand this doesn’t make sense if there are only 5 categories, but this is what the authors said they did)
-FIELD CALCULATOR / ADD FIELD: Apply weights to normalized indicator variables to get scores for each category (assets, access)
-FIELD CALCULATOR / ADD FIELD: Combine assets and access into adaptive capacity
-AGGREGATE: Aggregate into villages
-AGGREGATE: Aggregate into TA geometries, calculate average adaptive capacity score (Assets + Access) for each TA (Spatial Join → Group By)
+1. Bring in DHS Data [Households Level] (vector)
+2. FIELD CALCULATOR: Normalize each indicator variable into quintiles (0 is lowest, 5 is highest--we understand this doesn’t make sense if there are only 5 categories, but this is what the authors said they did)
+3. FIELD CALCULATOR / ADD FIELD: Apply weights to normalized indicator variables to get scores for each category (assets, access)
+4. FIELD CALCULATOR / ADD FIELD: Combine assets and access into adaptive capacity
+5. AGGREGATE: Aggregate into villages
+6. AGGREGATE: Aggregate into TA geometries, calculate average adaptive capacity score (Assets + Access) for each TA (Spatial Join → Group By)
+
+*HOUSEHOLD RESILIENCE & RASTER WORKFLOW [FINAL DELIVERABLE]*
+
+7. Bring in FEWSNET data (polygon***) and UNEP/GRID data (raster)
+8. FIELD CALCULATOR: quintile (assign scores 0-5) and weight FEWSNET data
+9. RASTER CALCULATOR: quintile (assign scores 0-5) and weight UNEP/GRID data
+10. RASTERIZE: turn household resilience at TA level into raster data at pixel size (30m? 90m?) of FEWSNET and UNEP
+11. RASTER CALCULATOR: Using FEWSNET, UNEP/GRID, and rasterized DHS resilience data; Calculate household resilience using the following formula:
+12. Household Resilience = Adaptive Capacity + Livelihood Sensitivity - Physical Exposure
+
 
 **Results: Figs. 3 & 4 (for us, only most recent data will be used - equivalent to Fig. 4)**
 

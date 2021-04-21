@@ -13,11 +13,9 @@ output: html_document
 ### [https://gis4dev.github.io/](https://gis4dev.github.io/)
 
 ```{r libraries, include = F}
-
 packages = c("downloader","haven","stars","dplyr","sf","rdhs", "classInt", "readr", "ggplot2", "here", "s2")
 setdiff(packages, rownames(installed.packages()))
 install.packages(setdiff(packages, rownames(installed.packages())), quietly=TRUE)
-
 library(downloader)
 library(haven)
 library(sf)
@@ -29,27 +27,22 @@ library(rdhs)
 library(readr)
 library(ggplot2)
 library(s2)
-
 sf_use_s2(T)
 ```
 
 ```{r download data}
-
 private_r = here("data","raw","private")
 public_r = here("data","raw","public")
-
 if (!"traditional_authorities" %in% list.files(public_r)){
   # Malawi administrative areas from GADM version 2.8 https://gadm.org/download_country_v2.html
   download("https://biogeo.ucdavis.edu/data/gadm2.8/shp/MWI_adm_shp.zip", here("data","raw","private", "MWI_adm_shp.zip"))
   unzip(here("data","raw","private", "MWI_adm_shp.zip"), exdir = here("data","raw","public","traditional_authorities"))
 }
-
 if (!"livelihood_zones" %in% list.files(public_r)){
   # Malawi livelihood zones from FEWS NET Data Center https://fews.net/fews-data/335
   download("https://fews.net/data_portal_download/download?data_file_path=http%3A//shapefiles.fews.net.s3.amazonaws.com/LHZ/MW_LHZ_2009.zip", here("data","raw","private","MW_LHZ_2009.zip"))
   unzip(here("data","raw","private","MW_LHZ_2009.zip"), exdir = here("data","raw","public","livelihood_zones"))
 }
-
 if (!"major_lakes.csv" %in% list.files(public_r)) {
   # major lakes in malawi: http://www.masdap.mw/
   download(
@@ -63,9 +56,7 @@ if (!"major_lakes.csv" %in% list.files(public_r)) {
 email = readline(prompt="Enter DHS Login Email: ")
 project = readline(prompt="Enter Project Name: ")
 rdhs_json = here("data","raw","private","rdhs.json")
-
 if (!file.exists(rdhs_json)) file.create(rdhs_json)
-
 # the information here was established through DHS project approval. See dhs-metadata.md in the data/metadata folder for details.
 # running this function will prompt you to enter email and project information in the Console and password in a popup
 set_rdhs_config(
@@ -75,7 +66,6 @@ set_rdhs_config(
   global = FALSE,
   cache_path = here("data","raw","private")
 )
-
 ```
 
 ```{r downloading dhs data}
@@ -89,9 +79,7 @@ dhs_downloads = get_datasets(
 ```{r 2010 adaptive capacity data}
 ta = read_sf(here("data", "raw", "public","traditional_authorities", "MWI_adm2.shp")) %>%
   st_make_valid() 
-
 lhz = read_sf(here("data", "raw", "public", "livelihood_zones", "MW_LHZ_2009.shp")) %>% st_make_valid()
-
 dhsclusters_2010 = readRDS(dhs_downloads$MWGE62FL) %>%
   as("sf") %>% 
   st_transform(3395) %>% 
@@ -101,12 +89,11 @@ dhsclusters_2010 = readRDS(dhs_downloads$MWGE62FL) %>%
   rename(ta_id = ID_2,
          lhz_id = FNID,
          urban_rural = URBAN_RURA)
-
 dhshh_2010 = readRDS(dhs_downloads$MWHR61SV) %>% zap_labels() 
 ```
 
 ```{r households to remove (2010)}
-rmv_2010 = dhshh_2010 %>%  filter(
+rmv_2010 = dhshh_2010 %>%  filter( #removing households that are unsuitable
   HV246A == 98 |
     HV246A == 99 |
     HV246D == 98 |
@@ -160,12 +147,15 @@ ta_capacity_2010 = dhshh_2010 %>%
   # removing any surveys where all livestock values were NA
   filter(!(is.na(HV246A) & is.na(HV246D) & is.na(HV246E)  & is.na(HV246G) )) %>% 
   # 24028 obs. of 19 variables 
-  # using rowwise() to find sum of livestock by household 
+  # using rowwise() to find sum of livestock by household  (different kinds of livestock?)
   rowwise %>%
-  mutate(hhlivestock = sum(HV246A, HV246D, HV246E, HV246G, na.rm = T)) %>%
+  mutate(hhlivestock = sum(HV246A, HV246D, HV246E, HV246G, na.rm = T)) %>% #na.rm is whether or not null values are removed
   ungroup %>%
   # using percent_rank(), those  
   # in cases where desc() is used, having a greater value before ranked makes a household more vulnerable 
+
+  # PUTTING DATA INTO QUINTILES
+  # percent_rank: ranks every value in a category on 0-1 scale 
   mutate(
     livestock = percent_rank(hhlivestock) * 4 + 1,
     sick = percent_rank(desc(HV248)) * 4 + 1,
@@ -177,12 +167,12 @@ ta_capacity_2010 = dhshh_2010 %>%
     water = percent_rank(desc(HV204)) * 4 + 1,
     electricity = percent_rank(HV206) * 4 + 1,
     cooking = percent_rank(desc(HV226)) * 4 + 1,
-    sexcat = percent_rank(desc(HV219)) * 4 + 1,
+    sexcat = percent_rank(desc(HV219)) * 4 + 1, #1 is male, 2 is female
     cellphone = percent_rank(desc(HV243A)) * 4 + 1,
     radio = percent_rank(HV207) * 4 + 1,
     urbanruralscore = ifelse(urban_rural == "U", 5, 1)
   ) %>%
-  # calculating capacity score based on table 2 in malcomb et al 
+  # calculating capacity score based on table 2 in malcomb et al (weighting)
   rowwise %>%
   mutate(
     capacity = sum(
@@ -207,7 +197,7 @@ ta_capacity_2010 = dhshh_2010 %>%
   # 19996 obs. of 33 variables 
   ungroup %>%
   group_by(ta_id) %>%
-  summarize(
+  summarize( #summarizing the capacity of each TA
     capacity_avg = mean(capacity),
     capacity_min = min(capacity),
     capacity_max = max(capacity),
@@ -222,17 +212,13 @@ ta = left_join(
   select(ta_capacity_2010, ta_id, capacity_2010 = capacity_avg),
   by = c("ID_2" = "ta_id")
 )
-
 # making capacity score resemble malcomb et al's work 
-ta = mutate(ta, capacity_2010 = capacity_2010 * 20)
+ta = mutate(ta, capacity_2010 = capacity_2010 * 20) # Might be meaningless #(similar to paper)
 # 256 features 
-
 # preparing breaks for mapping using natural jenks method
-ta_brks = filter(ta, !is.na(capacity_2010)) %>% {classIntervals(.$capacity_2010, 4, style = "jenks")$brks}
-
-ta_int = lapply(1:4, function(x) paste0(round(ta_brks[x],2)," - ", round(ta_brks[x +1],2))) %>% unlist()
-
-ta = mutate(ta, capacity_2010_brks = case_when(
+ta_brks = filter(ta, !is.na(capacity_2010)) %>% {classIntervals(.$capacity_2010, 4, style = "jenks")$brks} #Make 4 classes for mapping
+ta_int = lapply(1:4, function(x) paste0(round(ta_brks[x],2)," - ", round(ta_brks[x +1],2))) %>% unlist() #Taking the values and rounding them to 2 decimal places
+ta = mutate(ta, capacity_2010_brks = case_when( #putting data in #classes that we made
   capacity_2010 <= ta_brks[2] ~ ta_int[1],
   capacity_2010 <= ta_brks[3] ~ ta_int[2],
   capacity_2010 <= ta_brks[4] ~ ta_int[3],
@@ -251,14 +237,12 @@ save(
 # UNEP layers
 dr = read_stars(here("data", "raw", "public", "dr1010ipeykx.tif")) %>% 
   st_set_crs(4326) 
-
 fl = read_stars(here("data", "raw", "public",  "fl1010irmt.tif")) %>% 
   st_set_crs(4326) 
-
 ```
 
 ```{r cleaning and reprojecting rasters}
-# creating blank raster in extent
+# creating blank raster in extent (where did you get this info?)
 b = st_bbox(
   c(
     xmin = 35.9166666666658188,
@@ -268,19 +252,19 @@ b = st_bbox(
   ),
   crs = st_crs(4326)
 ) %>%
-  st_as_sfc()
-
-blank = st_as_stars(st_bbox(b), dx = 0.041667, dy = 0.041667)
-blank[[1]][] = NA
-
+  st_as_sfc() # add geom info + precision
+blank = st_as_stars(st_bbox(b), dx = 0.041667, dy = 0.041667) #cell size #in x and y directions
+blank[[1]][] = NA #to do with table (extracting elements from obj.)
 # reprojecting, clipping, and resampling rasters to new extent and cell size
 # use bilinear for drought to average continuous population exposure values
-dr = st_warp(dr, blank, use_gdal = T, method = "bilinear")
+dr = st_warp(dr, blank, use_gdal = T, method = "bilinear") #resample grid
+#object, destination, method, bilinear resampling possible bc gdal
 # use nearest neighbor for flood risk to preserve integer values
 fl = st_warp(fl, blank, method = "near")  
-
+#same thing as above, same destination
 # removing factors from fl
 nmrc = as.numeric(levels(fl[[1]]))[fl[[1]]]
+#raster in matrix form
 fl = blank
 fl[[1]][] = nmrc
 ```
@@ -288,19 +272,19 @@ fl[[1]][] = nmrc
 ```{r rasterizing geometries}
 # clipping traditional authorities with livelihood zones in order to remove lake
 st_clip = function(x,y) st_intersection(x, st_union(st_geometry(y)))
-
-st_agr(ta) = "constant"
-
+# building a clip function
+st_agr(ta) = "constant" #set relation to geometry attribute
 ta_2010 = st_clip(st_transform(filter(ta, is.na(capacity_2010) == F), 3395), st_buffer(st_transform(lhz, 3395), .01)) %>%
   st_transform(4326)
+  #above code applies the clip function to ta and lhz
 # 222 features 
-
 # making capacity rasters 
 ta_capacity = st_rasterize(ta_2010[, 'capacity_2010'], blank)
 #lhz_capacity = st_rasterize(lhz[,'capacity'], blank) 
 ```
 
 ```{r function to calculate vulnerability}
+# Raster calculator taking geo as input 
 vulnerability = function(geo) {
   # creating mask layer
   mask = geo 
@@ -308,11 +292,12 @@ vulnerability = function(geo) {
   mask[mask == 0] = NA
   
   # masking flood and drought 
-  flood = fl * mask * 4
+  # create mask based on where we have ta_capacity data
+  flood = fl * mask * 4 #don't need to do this for drought, flood is already in classes 
   drought = dr * mask
   
   # reclassifying drought layer
-  qt = quantile(drought[[1]], probs = seq(0, 1, 0.2), na.rm = T)
+  qt = quantile(drought[[1]], probs = seq(0, 1, 0.2), na.rm = T) # we want this to go from 0-1 at intervals of 0.2
   
   drought = drought %>%
     mutate(
@@ -323,7 +308,7 @@ vulnerability = function(geo) {
         drought[[1]] <= qt[[5]] ~ 4,
         drought[[1]] > qt[[5]] ~ 5
       )
-    ) %>% select(recoded) * 4
+    ) %>% select(recoded) * 4 # 5 * 4 = 20
   
   # final output (adding component rasters)
   final = (40 - geo) * 0.40 + drought * 0.20 + flood * 0.20
@@ -331,9 +316,11 @@ vulnerability = function(geo) {
 ```
 
 ```{r creating final vulnerability layers}
+# $ is a connector to indicate which data frame data comes from
 ta_final = vulnerability(ta_capacity)
-
-ta_2010$vuln = aggregate(ta_final,ta_2010,mean)$capacity_2010
+ta_2010$vuln = aggregate(ta_final,ta_2010,mean)$capacity_2010 
+#I'm confused about this function
+# Seems to be averaging the ta_final (which corresponds to vulnerability) and ta_2010 columns
 ```
 
 ```{r misc. map features}
@@ -344,7 +331,6 @@ lakes = st_as_sf(read_csv(here(public_r, "major_lakes.csv"))[, c("name", "the_ge
   st_union %>%
   st_sf %>%
   mutate(EA = "Major Lakes of Malawi")
-
 ea = lhz %>%
   st_transform(3395) %>%  #transform to world mercator (jh: not sure if we need to transform to 3395 and back here?)
   summarize %>%  
@@ -358,7 +344,6 @@ ea = lhz %>%
   ) %>%
   rbind(lakes) %>%
   st_make_valid()
-
 ```
 
 ```{r 2010 adaptive capacity map}
@@ -386,7 +371,6 @@ map_2010 = ggplot() +
   labs(title = "Adaptive Capacity Scores Based on 2010 DHS Surveys in 222 Traditional Authorities") +
   theme_minimal() +
   theme(legend.title = element_blank())
-
 map_2010
 ```
 
@@ -397,9 +381,9 @@ clrs = mutate(
     EA == "Missing Data" ~ "#999999",
     EA == "National Parks and Reserves" ~ "#D9EABB",
     EA == "Major Lakes of Malawi" ~ "lightblue"
+  
   )
 )$colors
-
 vuln_map = ggplot() +
   geom_sf(data = ea,
           fill = clrs,
@@ -422,14 +406,11 @@ vuln_map = ggplot() +
     axis.title.x = element_blank(),
     axis.title.y = element_blank()
   )
-
 vuln_map
 ```
 
 ```{r saving maps}
-
 save(map_2010, vuln_map, file = here("results","maps","maps.Rdata"))
-
 ggsave(
   here("results","maps","ac_2010.png"),
   plot = map_2010,
@@ -448,10 +429,8 @@ ggsave(
 
 ```{r saving spatial data outputs}
 results = here("data","derived","public","results.gpkg")
-
 write_stars(ta_final, here("data","derived","public","ta_capacity.tif"))
-
 write_sf(ta_2010, results, "ta_2010")
-
 write_sf(lhz, results, "lhz")
 ```
+
