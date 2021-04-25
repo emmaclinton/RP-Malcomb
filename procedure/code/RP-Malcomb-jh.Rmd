@@ -12,6 +12,38 @@ output: html_document
 
 ### [https://gis4dev.github.io/](https://gis4dev.github.io/)
 
+
+
+```{r load in lhz and right join to shapes}
+
+lhz_data = read_csv(here("data", "derived", "public", "lhz.csv")) 
+
+#Join the LHZ data to the geometries of the LHZs
+
+lhz_sensitivity <- lhz %>%
+  right_join(lhz_data, by = ("LZCODE" = "LZCODE")) %>%
+
+# PUTTING DATA INTO QUINTILES
+  # percent_rank: ranks every value in a category on 0-1 scale 
+  mutate(
+    ownCrops = percent_rank(pctOwnCrops) * 4 + 1,
+    IncWage= percent_rank(desc(pctIncWage)) * 4 + 1,
+    IncCashCrops = percent_rank(pctIncCashCrops) * 4 + 1,
+    disasterCoping_mutate = percent_rank(disasterCoping) * 4 + 1
+  )%>%
+
+  # calculating capacity score based on table 2 in malcomb et al (weighting)
+ rowwise %>%
+  mutate(
+    capacity = sum(
+      ownCrops * 0.06,
+      IncWage * 0.06,
+      IncCashCrops * 0.04,
+      disasterCoping_mutate * 0.04
+    )) %>% ungroup
+
+```
+
 ```{r libraries, include = F}
 packages = c("downloader","haven","stars","dplyr","sf","rdhs", "classInt", "readr", "ggplot2", "here", "s2")
 setdiff(packages, rownames(installed.packages()))
@@ -213,7 +245,7 @@ ta = left_join(
   by = c("ID_2" = "ta_id")
 )
 # making capacity score resemble malcomb et al's work 
-ta = mutate(ta, capacity_2010 = capacity_2010 * 20) # Might be meaningless #(similar to paper)
+#ta = mutate(ta, capacity_2010 = capacity_2010 * 40) # Might be meaningless #(similar to paper)
 # 256 features 
 # preparing breaks for mapping using natural jenks method
 ta_brks = filter(ta, !is.na(capacity_2010)) %>% {classIntervals(.$capacity_2010, 4, style = "jenks")$brks} #Make 4 classes for mapping
@@ -283,6 +315,11 @@ ta_capacity = st_rasterize(ta_2010[, 'capacity_2010'], blank)
 #lhz_capacity = st_rasterize(lhz[,'capacity'], blank) 
 ```
 
+```{r rasterizing geometries}
+# making capacity rasters 
+lhz_capacity = st_rasterize(lhz_sensitivity[,'capacity'], blank) 
+```
+
 ```{r function to calculate vulnerability}
 # Raster calculator taking geo as input 
 vulnerability = function(geo) {
@@ -311,7 +348,8 @@ vulnerability = function(geo) {
     ) %>% select(recoded) * 4 # 5 * 4 = 20
   
   # final output (adding component rasters)
-  final = (40 - geo) * 0.40 + drought * 0.20 + flood * 0.20
+  final = (40 - geo) * 0.40 + drought * 0.20 + flood * 0.20 + lhz_capacity * 0.20
+    #This now includes the lhz capacity data 
 }
 ```
 
@@ -374,6 +412,12 @@ map_2010 = ggplot() +
 map_2010
 ```
 
+```{r find max and min values of raster}
+max(ta_final[[1]],na.rm = TRUE)
+min(ta_final[[1]],na.rm = TRUE)
+
+```
+
 ```{r vulnerability map}
 clrs = mutate(
   ea,
@@ -392,11 +436,11 @@ vuln_map = ggplot() +
   scale_fill_gradient(
     low = "#FFFF75",
     high = "#CF4611",
-    breaks = c(9.968335,  17.99652),
+    breaks = c(16.52779,  23.03283),
     labels = c("Lower Vulnerability", "Higher Vulnerability"),
     na.value = "transparent",
     guide = "colourbar",
-    limits = c(9.968335,  17.99652)
+    limits = c(16.52779,  23.03283)
   ) +
   scale_x_continuous(breaks = c(33,34,35,36)) +
   labs(title = "Malawi Vulnerability to Climate Change") +
@@ -412,14 +456,14 @@ vuln_map
 ```{r saving maps}
 save(map_2010, vuln_map, file = here("results","maps","maps.Rdata"))
 ggsave(
-  here("results","maps","ac_2010.png"),
+  here("results","maps","ac_2010_New.png"),
   plot = map_2010,
   width = 8.5,
   height = 11,
   units = "in"
 )
 ggsave(
-  here("results","maps","vulnerability.png"),
+  here("results","maps","vulnerability_new.png"),
   plot = vuln_map,
   width = 8.5,
   height = 11,
@@ -433,4 +477,147 @@ write_stars(ta_final, here("data","derived","public","ta_capacity.tif"))
 write_sf(ta_2010, results, "ta_2010")
 write_sf(lhz, results, "lhz")
 ```
+
+```{r load in digital replicas of Malcomb et al.'s maps}
+install.packages = c("dplyr","rgdal", "sf")
+library(dplyr)
+library (rgdal)
+library(sf)
+
+# read in layers to environment
+fig4 <- st_read(dsn = paste0(here::here(), "/data/derived/public/georeferencing.gpkg"), layer="TAresilience_4")
+fig5 <- st_read(dsn = paste0(here::here(), "/data/derived/public/georeferencing.gpkg"), layer="georef_vulnerability_grid")
+```
+
+```{r load in original and reproduced figures (fig4)}
+or_fig4 = # load original figure 4 data
+  read_sf(here("data", "derived", "public", "georeferencing.gpkg"), 
+          layer="TAresilience_4") %>% 
+  # load ta_resilience layer from georeferencing geopackage
+  st_drop_geometry() %>%
+  # remove the geometry data because two geometries cannot be joined
+  select(c(ID_2,resilience)) %>%  
+  # select only the ID_2 and resilience columns
+  na.omit()
+  # remove records with null values
+
+
+rp_fig4 = ta_2010 %>% # prepare our reproduction of figure 4 data
+  select(c(ID_2,capacity_2010)) %>%  
+  # select only the ID_2 and resilience columns
+  # note: geometry columns are 'sticky' -- only way to remove is st_drop_geometry()
+  na.omit()  %>%
+  # remove records with null values
+  mutate(rp_res = case_when(
+  capacity_2010 <= ta_brks[2] ~ 1,
+  capacity_2010 <= ta_brks[3] ~ 2,
+  capacity_2010 <= ta_brks[4] ~ 3,
+  capacity_2010 >  ta_brks[4] ~ 4
+))
+# code the capacity scores as integers, as we see them classified on the map. 
+#ta_brks was the result of a Jenks classification, as noted on Malcomb et al's maps
+```
+
+```{r compare fig 4 original and replicate}
+
+fig4compare = inner_join(rp_fig4,or_fig4,by="ID_2") %>%  
+  #inner join on field ID_2 keeps only matching records
+  filter(rp_res>0 & rp_res<5 & resilience > 0 & resilience < 5)
+  # keep only records with valid resilience scores
+
+table(fig4compare$resilience,fig4compare$rp_res)
+# crosstabulation with frequencies
+
+cor.test(fig4compare$resilience,fig4compare$rp_res,method="spearman")
+# Spearman's Rho correlation test
+
+fig4compare = mutate(fig4compare, difference = rp_res - resilience) 
+# Calculate difference between the maps so that you can create a difference map
+```
+
+```{r compare continuous raster maps}
+orfig5vect = 
+  read_sf(here("data", "derived", "public", "georeferencing.gpkg"), 
+          layer="vulnerability_grid")
+# load original figure 5 data
+
+orfig5rast = st_rasterize(orfig5vect["X_mean"], template=ta_final)
+# convert mean of blue values into a raster using ta_final as a reference for raster
+# extent, cell size, CRS, etc.
+
+orfig5rast = orfig5rast %>% 
+  mutate(or = 1-
+           (X_mean - min(orfig5rast[[1]], na.rm= TRUE)) /
+           (max(orfig5rast[[1]], na.rm= TRUE) -
+            min(orfig5rast[[1]], na.rm= TRUE)
+        )
+)  # or is Re-scaled from 0 to 1 with (value - min)/(max - min)
+# it is also inverted, because higher blue values are less red
+
+
+ta_final = ta_final %>% 
+  mutate(rp =
+           (capacity_2010 - min(ta_final[[1]], na.rm= TRUE)) /
+           (max(ta_final[[1]], na.rm= TRUE) -
+            min(ta_final[[1]], na.rm= TRUE)
+        )
+)  # rp is Re-scaled from 0 to 1 with (value - min)/(max - min)
+
+fig5comp = c( select(ta_final,"rp"), select(orfig5rast,"or"))
+# combine the original (or) fig 5 and reproduced (rp) fig 5
+
+fig5comp = fig5comp %>% mutate( diff = rp - or )
+# calculate difference between the original and reproduction,
+# for purposes of mapping
+
+fig5comppts = st_as_sf(fig5comp)
+# convert raster to vector points to simplify plotting and correlation testing
+
+plot(fig5comppts$or, fig5comppts$rp, xlab="Original Study", ylab="Reproduction")
+# create scatterplot of original results and reproduction results
+
+cor.test(fig5comppts$or, fig5comppts$rp, method="spearman")
+# Spearman's Rho correlation test
+```
+```{r find max and min values of raster}
+max(fig5comp[[1]],na.rm = TRUE)
+min(fig5comp[[1]],na.rm = TRUE)
+
+```
+
+```{r vulnerability map differences}
+clrs = mutate(
+  ea,
+  colors = case_when(
+    EA == "Missing Data" ~ "#999999",
+    EA == "National Parks and Reserves" ~ "#D9EABB",
+    EA == "Major Lakes of Malawi" ~ "lightblue"
+  
+  )
+)$colors
+vuln_map = ggplot() +
+  geom_sf(data = ea,
+          fill = clrs,
+          color = NA) +
+  geom_stars(data = fig5comp) +
+  scale_fill_gradient(
+    low = "#FFFF75",
+    high = "#CF4611",
+    breaks = c(0,  1),
+    labels = c("Lower Difference", "Higher Difference"),
+    na.value = "transparent",
+    guide = "colourbar",
+    limits = c(0,  1)
+  ) +
+  scale_x_continuous(breaks = c(33,34,35,36)) +
+  labs(title = "Fig. 4 Replication Comparison") +
+  theme_minimal() +
+  theme(
+    legend.title = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank()
+  )
+vuln_map_diff
+```
+
 

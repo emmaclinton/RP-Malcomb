@@ -14,8 +14,8 @@ Your Name, Joseph Holler, Kufre Udoh, Open Source GIScience students of fall 201
 
 Replication Materials Available at: [github repository name](github repository link)
 
-Created: `DD Month YYYY`
-Revised: `DD Month YYYY`
+Created: `04 April 2021`
+Revised: `06 April 2021`
 
 ## Abstract
 
@@ -29,6 +29,49 @@ The original study was published without data or code, but has detailed narrativ
 
 
 ### Data Description and Variables
+
+##*Access and Assets Data*:
+ Demographic and Health Survey data are a product of the United States Agency for International Development (USAID). Variables contained in this dataset are used to represent adaptive capacity (access + assets) in the Malcomb et al.’s (2014) study. These data come from survey questionnaires with large sample sizes.
+The DHS data used in our study were collected in 2010. In Malawi, the provenance of the DHA data dates back as far as 1992, but has not been collected consistently every year. Each point in the household dataset represents a cluster of households with each cluster corresponding to some form of census enumeration units, such as villages in rural areas or city blocks in urban areas [DHS GPS Manual](/data/metadata/DHS_GPS_Manual_English_A4_24May2013_DHSM9.pdf). This means that each household in each cluster has the same GPS data. This data is collected by trained [USAID](https://www.usaid.gov/) staff using GPS receivers.
+Missing data is a common occurrence in this dataset as a result of negligence or incorrect naming. However, according to the [DHS GPS Manual](/data/metadata/DHS_GPS_Manual_English_A4_24May2013_DHSM9.pdf), these issues are easily rectified and typically sites for which data does not exist are recollected. Sometimes, however, missing information is coded in as such or assigned a proxy location.
+The DHS website acknowledges the high potential for inconsistent or incomplete data in such broad and expansive survey sets. Missing survey data (responses) are never estimated or made up; they are instead coded as a special response indicating the absence of data. As well, there are clear policies in place to ensure the data’s accuracy. More information about data validity can be found on the [DHS’s Data Quality and Use site](https://www.dhsprogram.com/data/Data-Quality-and-Use.cfm).
+
+**DHS Variables:**
+| Variable Code | Definition |
+| ------------- | ------------- |
+| HHID | "Case Identification" |
+| HV001 | "Cluster number" |
+|HV002 | Household number |
+| HV246A |"Cattle own" |
+|HV246D | "Goats own"|
+|HV246E | "Sheep own" |
+|HV246G | "Pigs own" |
+| HV248 |"Number of sick people 18-59"|
+| HV245 | "Hectares for agricultural land"|
+|HV271 | "Wealth index factor score (5 decimals)"|
+|HV251 | "Number of orphans and vulnerable children"|
+|HV207 | “Has Radio” |
+| HV243A | “Has a Mobile Telephone”|
+|HV219 | Sex of Head of Household”|
+|HV226 | “Type of Cooking Fuel” |
+| HV206 |"Has electricty” |
+ |HV204 |“Time to get to Water Source”|
+
+**Variable Transformations**
+1) Eliminate households with null and/or missing values
+1) Join TA and LHZ ID data to the DHS clusters
+1) Eliminate NA values for livestock
+1) Sum counts of all different kinds of livestock into a single variable
+1) Apply weights to normalized indicator variables to get scores for each category (assets, access)
+1) find the stats of the capacity of each TA (min, max, mean, sd)
+1) Join ta_capacity to TA based on ta_id
+1) Prepare breaks for mapping
+1) Class intervals based on capacity_2010 field
+1) Take the values and round them to 2 decimal places
+1) Put data in 4 classes based on break values
+
+
+
 
 Outline the data used in the study, including:
 
