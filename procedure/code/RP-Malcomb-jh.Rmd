@@ -386,11 +386,10 @@ ea = lhz %>%
 
 ```{r 2010 adaptive capacity map}
 map_2010 = ggplot() +
-  geom_sf(data = ea,
+  geom_sf(data = EA,
           aes(fill = EA),
           color = NA) +
-  geom_sf(
-    data = ta_2010,
+  geom_sf( data=ta_2010,
     aes(fill = capacity_2010_brks),
     color = "white",
     lwd = .2
@@ -399,10 +398,10 @@ map_2010 = ggplot() +
       "Missing Data" = "#FFC389",
       "National Parks and Reserves" = "#D9EABB",
       "Major Lakes of Malawi" = "lightblue",
-      "13.95 - 15.84" = "#333333",
-      "15.84 - 17.13" = "#666666",
-      "17.13 - 18.89" = "#999999",
-      "18.89 - 21.36" = "#CCCCCC"
+      "0.7 - 0.79" = "#333333",
+      "0.79 - 0.86" = "#666666",
+      "0.86 - 0.94" = "#999999",
+      "0.94 - 1.07" = "#CCCCCC"
     )
   ) +
   scale_x_continuous(breaks = c(33,34,35,36)) +
@@ -535,6 +534,52 @@ fig4compare = mutate(fig4compare, difference = rp_res - resilience)
 # Calculate difference between the maps so that you can create a difference map
 ```
 
+```{r misc. map features}
+lakes = st_as_sf(read_csv(here(public_r, "major_lakes.csv"))[, c("name", "the_geom")],
+                 wkt = "the_geom",
+                 crs = 4326) %>%
+  st_geometry %>%
+  st_union %>%
+  st_sf %>%
+  mutate(EA = "Major Lakes of Malawi")
+ea = lhz %>%
+  st_transform(3395) %>%  #transform to world mercator (jh: not sure if we need to transform to 3395 and back here?)
+  summarize %>%  
+  st_geometry %>%  #dissolve to one feature / one geometry
+  st_intersection(st_geometry(st_transform(ta, 3395))) %>%   #intersect with traditional authorities to clip them
+  st_transform(4326) %>%
+  st_sf %>%   #make into new simple features data frame
+  mutate(EA = case_when(
+    grepl("Reserve", ta[["NAME_2"]]) | grepl("Park", ta[["NAME_2"]]) ~ "National Parks and Reserves",
+    T ~ "Missing Data")   # search and replace names- anything with Reserve or Park in the name becomes National Parks and Reserves
+  ) %>%
+  rbind(lakes) %>%
+  st_make_valid()
+```
+
+```{r 2010 adaptive capacity difference}
+
+ac_difference_map =ggplot() +
+geom_sf(data = ea,
+aes(fill = EA),
+color = NA) +
+geom_sf(
+data = fig4compare,
+aes(fill = factor(difference)),
+color = "white",
+lwd = .2
+) +
+scale_fill_manual(limits = c("-2","-1","0","1","Missing Data","Major Lakes of Malawi","National Parks and Reserves"),
+  values = c("-2"="#e66101","-1"="#fdb863","0"="#cccccc","1"="#b2abd2","Missing Data"="#FFFFFF","Major Lakes of Malawi"="lightblue","National Parks and Reserves"="#D9EABB"))+
+scale_x_continuous(breaks = c(33,34,35,36)) +
+labs(title = "Fig. 4 Replication Comparison") +
+theme_minimal() +
+theme(legend.title = element_blank())
+ac_difference_map
+
+```
+
+
 ```{r compare continuous raster maps}
 orfig5vect = 
   read_sf(here("data", "derived", "public", "georeferencing.gpkg"), 
@@ -585,7 +630,7 @@ min(fig5comp[[1]],na.rm = TRUE)
 
 ```
 
-```{r vulnerability map differences}
+```{r vulnerability comparison map}
 clrs = mutate(
   ea,
   colors = case_when(
@@ -595,29 +640,31 @@ clrs = mutate(
   
   )
 )$colors
-vuln_map = ggplot() +
+vuln_map_comp = ggplot() +
   geom_sf(data = ea,
           fill = clrs,
           color = NA) +
-  geom_stars(data = fig5comp) +
-  scale_fill_gradient(
-    low = "#FFFF75",
-    high = "#CF4611",
-    breaks = c(0,  1),
-    labels = c("Lower Difference", "Higher Difference"),
+  geom_stars(data = fig5comp["diff"]) +
+  scale_fill_gradient2(
+    low = "#e66101",
+    high = "#5e3c99",
+    breaks = c(-0.9782641,0.71083960),
+    labels = c("Negative Difference", "Positive Difference"),
     na.value = "transparent",
     guide = "colourbar",
-    limits = c(0,  1)
+    limits = c(-0.9782641,0.71083960)
   ) +
   scale_x_continuous(breaks = c(33,34,35,36)) +
-  labs(title = "Fig. 4 Replication Comparison") +
+  labs(title = "Fig. 5 Replication Comparison") +
   theme_minimal() +
   theme(
     legend.title = element_blank(),
     axis.title.x = element_blank(),
     axis.title.y = element_blank()
   )
-vuln_map_diff
+vuln_map_comp
 ```
 
 
+
+library(writeexcel)
