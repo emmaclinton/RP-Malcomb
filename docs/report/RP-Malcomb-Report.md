@@ -112,7 +112,7 @@ The original study was conducted using ArcGIS and STATA, but does not state whic
 The replication study will use R.
 
 ### Materials and Procedure
-The steps outlined below mirror the steps used in the [R Code for this project](/RP-Malcomb/procedure/code/RP-Malcomb-jh.Rmd).
+The steps outlined below mirror the steps used in the [R Code for this project](https://github.com/emmaclinton/RP-Malcomb/blob/main/procedure/code/RP-Malcomb-jh.Rmd).
 
 *Process Adaptive Capacity*
 1. Bring in DHS Data [Households Level] (vector)
