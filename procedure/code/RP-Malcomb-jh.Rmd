@@ -15,7 +15,7 @@ output: html_document
 
 
 ```{r load in lhz and right join to shapes}
-
+# Read in edited LHZ data 
 lhz_data = read_csv(here("data", "derived", "public", "lhz.csv")) 
 
 #Join the LHZ data to the geometries of the LHZs
@@ -245,7 +245,7 @@ ta = left_join(
   by = c("ID_2" = "ta_id")
 )
 # making capacity score resemble malcomb et al's work 
-#ta = mutate(ta, capacity_2010 = capacity_2010 * 40) # Might be meaningless #(similar to paper)
+#ta = mutate(ta, capacity_2010 = capacity_2010 ) # Might be meaningless #(similar to paper)
 # 256 features 
 # preparing breaks for mapping using natural jenks method
 ta_brks = filter(ta, !is.na(capacity_2010)) %>% {classIntervals(.$capacity_2010, 4, style = "jenks")$brks} #Make 4 classes for mapping
@@ -357,7 +357,7 @@ vulnerability = function(geo) {
 # $ is a connector to indicate which data frame data comes from
 ta_final = vulnerability(ta_capacity)
 ta_2010$vuln = aggregate(ta_final,ta_2010,mean)$capacity_2010 
-#I'm confused about this function
+
 # Seems to be averaging the ta_final (which corresponds to vulnerability) and ta_2010 columns
 ```
 
